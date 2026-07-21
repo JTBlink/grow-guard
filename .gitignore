@@ -32,3 +32,4 @@ data/
 
 # ── OpenCode / omo 运行时 ─────────────────────
 .omo/
+.codegraph
