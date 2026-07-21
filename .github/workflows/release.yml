@@ -30,14 +30,7 @@ jobs:
       # --- 校验 tag 版本与 tauri.conf.json 一致(防止漏改版本号);手动触发跳过 ---
       - name: Verify version matches tag
         if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          CONF_VER="$(grep -m1 '"version"' desktop/src-tauri/tauri.conf.json | sed -E 's/.*"([0-9.]+)".*/\1/')"
-          echo "tag=$TAG  tauri.conf.json=$CONF_VER"
-          if [ "$TAG" != "$CONF_VER" ]; then
-            echo "::error::标签 v$TAG 与 tauri.conf.json 的 version($CONF_VER)不一致,请先同步版本号"
-            exit 1
-          fi
+        run: bash scripts/ci/verify-version.sh
 
       # --- 工具链:Rust + tauri-cli + Node/pnpm ---
       - name: Install Rust
@@ -75,37 +68,7 @@ jobs:
       # --- 归集产物,统一改成 ASCII 文件名便于下载(产品名含中文"青锁盾")---
       - name: Collect artifacts
         id: collect
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="$(grep -m1 '"version"' desktop/src-tauri/tauri.conf.json | sed -E 's/.*"([0-9.]+)".*/\1/')"
-          fi
-          OUT="release-artifacts"
-          mkdir -p "$OUT"
-          BUNDLE="desktop/src-tauri/target/release/bundle"
-
-          # .pkg(build.sh 已按 ASCII 命名 GrowGuard-<版本>.pkg)
-          if [ -f "dist/GrowGuard-${VERSION}.pkg" ]; then
-            cp "dist/GrowGuard-${VERSION}.pkg" "$OUT/GrowGuard-${VERSION}.pkg"
-          fi
-
-          # .dmg(产品名为中文,重命名为 ASCII)
-          dmg="$(find "$BUNDLE/dmg" -maxdepth 1 -name '*.dmg' 2>/dev/null | head -1 || true)"
-          if [ -n "$dmg" ]; then
-            cp "$dmg" "$OUT/GrowGuard-${VERSION}.dmg"
-          fi
-
-          # .app 打成 zip 兜底(dmg 偶发失败时仍有可分发的 App)
-          app="$(find "$BUNDLE/macos" -maxdepth 1 -name '*.app' 2>/dev/null | head -1 || true)"
-          if [ -n "$app" ]; then
-            ditto -c -k --sequesterRsrc --keepParent "$app" "$OUT/GrowGuard-${VERSION}-app.zip"
-          fi
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "生成的发布产物(版本 $VERSION):"
-          ls -lh "$OUT"
+        run: bash scripts/ci/collect-artifacts.sh
 
       - name: Upload build artifacts (CI)
         uses: actions/upload-artifact@v4
