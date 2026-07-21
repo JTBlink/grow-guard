@@ -1,0 +1,127 @@
+/* 青锁盾 · 设计系统 (Apple-native Polish)
+ * 品牌规范: macOS Sonoma 风格 / 呼吸感景深 / 精细语义色 / 多彩半透
+ */
+
+:root {
+  /* 品牌核心色 */
+  --brand: #008eb3;          
+  --brand-deep: #005a75;     
+  --brand-glow: rgba(0, 142, 179, 0.2); 
+  
+  /* 分类主题色 (Category Accents) */
+  --c-apps: #008eb3;         /* Teal */
+  --c-apps-bg: rgba(0, 142, 179, 0.12);
+  --c-status: #5856d6;       /* Indigo */
+  --c-status-bg: rgba(88, 86, 214, 0.12);
+  --c-sites: #007aff;        /* Blue */
+  --c-sites-bg: rgba(0, 122, 255, 0.12);
+  --c-sched: #ff9500;        /* Amber */
+  --c-sched-bg: rgba(255, 149, 0, 0.12);
+  --c-unlock: #34c759;       /* Green */
+  --c-unlock-bg: rgba(52, 199, 89, 0.12);
+
+  /* 状态语义色 */
+  --safe: #34c759;           
+  --safe-bg: rgba(52, 199, 89, 0.12);
+  --warn: #ff9500;           
+  --warn-bg: rgba(255, 149, 0, 0.12);
+  --danger: #ff3b30;         
+  --danger-bg: rgba(255, 59, 48, 0.12);
+
+  /* macOS 标准圆角 */
+  --r-card: 12px; /* Slightly softer for modern macOS */
+  --r-ctrl: 6px;
+  --r-icon: 8px;
+
+  /* 动效 */
+  --ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --dur: 0.2s;
+}
+
+/* 浅色模式 (macOS Light) */
+:root {
+  --bg: #f5f5f7;             
+  --bg-ambient: radial-gradient(circle at 50% -20%, rgba(0, 142, 179, 0.08) 0%, rgba(0, 142, 179, 0) 60%);
+  --bg-tint: rgba(255, 255, 255, 0.6); 
+  --card: rgba(255, 255, 255, 0.85);   
+  --card-border: rgba(0, 0, 0, 0.06); 
+  --divider: rgba(0, 0, 0, 0.06); 
+  --text: #1d1d1f;           
+  --text-soft: #424245;      
+  --text-mute: #86868b;      
+  
+  --hero-bg: linear-gradient(135deg, #008eb3 0%, #0056d6 100%);
+  --hero-text: #ffffff;
+  --hero-sub: rgba(255, 255, 255, 0.8);
+  --hero-shadow: 0 8px 24px rgba(0, 86, 214, 0.15), 0 2px 6px rgba(0, 142, 179, 0.1);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03), 0 1px 4px rgba(0, 0, 0, 0.02);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 深色模式 (macOS Dark) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand: #32ade6;        
+    --brand-deep: #64d2ff;
+    --brand-glow: rgba(50, 173, 230, 0.2);
+
+    --c-apps: #32ade6;
+    --c-apps-bg: rgba(50, 173, 230, 0.15);
+    --c-status: #5e5ce6;
+    --c-status-bg: rgba(94, 92, 230, 0.15);
+    --c-sites: #0a84ff;
+    --c-sites-bg: rgba(10, 132, 255, 0.15);
+    --c-sched: #ff9f0a;
+    --c-sched-bg: rgba(255, 159, 10, 0.15);
+    --c-unlock: #32d74b;
+    --c-unlock-bg: rgba(50, 215, 75, 0.15);
+
+    --safe: #32d74b;
+    --safe-bg: rgba(50, 215, 75, 0.15);
+    --warn: #ff9f0a;
+    --warn-bg: rgba(255, 159, 10, 0.15);
+    --danger: #ff453a;
+    --danger-bg: rgba(255, 69, 58, 0.15);
+
+    --bg: #1c1c1e;
+    --bg-ambient: radial-gradient(circle at 50% -20%, rgba(50, 173, 230, 0.12) 0%, rgba(50, 173, 230, 0) 60%);
+    --bg-tint: rgba(255, 255, 255, 0.04);
+    --card: rgba(44, 44, 46, 0.85);
+    --card-border: rgba(255, 255, 255, 0.06);
+    --divider: rgba(255, 255, 255, 0.08);
+    --text: #f5f5f7;
+    --text-soft: #ebebf5;
+    --text-mute: #98989d;
+
+    --hero-bg: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
+    --hero-text: #ffffff;
+    --hero-sub: rgba(255, 255, 255, 0.7);
+    --hero-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(10, 132, 255, 0.2);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2), 0 1px 4px rgba(0, 0, 0, 0.1);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: -0.01em; 
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg); 
+  background-image: var(--bg-ambient);
+  background-attachment: fixed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

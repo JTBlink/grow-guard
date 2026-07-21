@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="22" height="22">
+  <!-- 青锁盾 菜单栏模板图标:盾牌边框(访问边界)+ 内嵌挂锁。
+       template 模式下只看 alpha:黑色=图标形状,透明=背景/镂空。
+       锁孔用 mask 从锁体真正挖空(alpha=0),不能用白色填充(白色在 template 下仍是黑)。
+       图形放大到几乎铺满 22x22 画布(仅留 ~1pt 边距),让菜单栏里的字形更大更清晰。 -->
+  <mask id="keyhole">
+    <rect x="0" y="0" width="22" height="22" fill="#fff"/>
+    <circle cx="11" cy="12" r="1.15" fill="#000"/>
+    <rect x="10.45" y="12" width="1.1" height="2.3" rx="0.55" fill="#000"/>
+  </mask>
+  <!-- 盾牌边框 = 访问边界(放大铺满画布,底部留 ~0.5pt 防裁切) -->
+  <path d="M11 1.6
+           C14.4 3.3 17.6 4.2 20.6 4.4
+           C20.6 11.1 19.3 17.2 11 21.5
+           C2.7 17.2 1.4 11.1 1.4 4.4
+           C4.4 4.2 7.6 3.3 11 1.6 Z"
+        fill="none" stroke="#000" stroke-width="1.7" stroke-linejoin="round"/>
+  <!-- 挂锁提梁(U 形,与边框同描边) -->
+  <path d="M8.15 9.7 V8.05 a2.85 2.85 0 0 1 5.7 0 V9.7"
+        fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- 锁体(圆角矩形,实心)+ 锁孔镂空 -->
+  <rect x="7.05" y="9.55" width="7.9" height="5.9" rx="1.7" fill="#000" mask="url(#keyhole)"/>
+</svg>
