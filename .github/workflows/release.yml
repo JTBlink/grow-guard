@@ -6,6 +6,14 @@ on:
   push:
     tags:
       - "v*"
+  # 手动触发:在 Actions 页面点 "Run workflow"。
+  # 默认只构建并上传 CI 产物,不发布 Release;勾选 publish_release 才建 Release。
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "构建后是否创建 GitHub Release(默认否,仅产出 CI 附件)"
+        type: boolean
+        default: false
 
 # 允许 workflow 用 GITHUB_TOKEN 创建 Release / 上传附件
 permissions:
@@ -19,8 +27,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # --- 校验 tag 版本与 tauri.conf.json 一致(防止漏改版本号) ---
+      # --- 校验 tag 版本与 tauri.conf.json 一致(防止漏改版本号);手动触发跳过 ---
       - name: Verify version matches tag
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           CONF_VER="$(grep -m1 '"version"' desktop/src-tauri/tauri.conf.json | sed -E 's/.*"([0-9.]+)".*/\1/')"
@@ -68,7 +77,11 @@ jobs:
         id: collect
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(grep -m1 '"version"' desktop/src-tauri/tauri.conf.json | sed -E 's/.*"([0-9.]+)".*/\1/')"
+          fi
           OUT="release-artifacts"
           mkdir -p "$OUT"
           BUNDLE="desktop/src-tauri/target/release/bundle"
@@ -90,7 +103,8 @@ jobs:
             ditto -c -k --sequesterRsrc --keepParent "$app" "$OUT/GrowGuard-${VERSION}-app.zip"
           fi
 
-          echo "生成的发布产物:"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "生成的发布产物(版本 $VERSION):"
           ls -lh "$OUT"
 
       - name: Upload build artifacts (CI)
@@ -102,11 +116,15 @@ jobs:
 
       # --- 创建/更新 Release 并挂附件 ---
       - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish_release
         uses: softprops/action-gh-release@v2
         with:
+          # tag 触发用触发的 tag;手动触发用 tauri.conf.json 版本组成的 v<版本>
+          tag_name: v${{ steps.collect.outputs.version }}
+          name: v${{ steps.collect.outputs.version }}
           files: release-artifacts/*
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(steps.collect.outputs.version, '-') }}
           generate_release_notes: true
           body: |
             ## 安装
@@ -119,4 +137,4 @@ jobs:
             | `GrowGuard-*.dmg` | 仅桌面 App,拖拽到「应用程序」;CLI/守护需另装 |
             | `GrowGuard-*-app.zip` | `.app` 压缩包(dmg 兜底) |
 
-            详见仓库内 [`docs/INSTALL.md`](../blob/${{ github.ref_name }}/docs/INSTALL.md)。
+            详见仓库内 [`docs/INSTALL.md`](../blob/v${{ steps.collect.outputs.version }}/docs/INSTALL.md)。
