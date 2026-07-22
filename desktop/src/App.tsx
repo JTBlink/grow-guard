@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
 import logoUrl from "./assets/logo.png";
 import "./App.css";
 
@@ -188,12 +189,16 @@ function TopBar({
 }
 
 function AboutDialog({ on, onClose }: { on: boolean; onClose: () => void }) {
+  const [version, setVersion] = useState("");
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => setVersion(""));
+  }, []);
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="about-card" onClick={(e) => e.stopPropagation()}>
         <img className="about-logo" src={logoUrl} alt="青锁盾" />
         <div className="about-name">青锁盾</div>
-        <div className="about-ver">GROW GUARD · v1.0.0</div>
+        <div className="about-ver">GROW GUARD{version ? ` · v${version}` : ""}</div>
         <p className="about-desc">
           macOS 青少年访问锁 —— 应用时长控制、网站过滤、使用时段管理，
           由后台守护进程持续守护，防绕过、防卸载。

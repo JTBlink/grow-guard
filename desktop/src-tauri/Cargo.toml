@@ -1,6 +1,6 @@
 [package]
 name = "grow-guard-gui"
-version = "1.0.0"
+version = "1.1.0"
 description = "青锁盾 · 青少年访问锁"
 authors = ["JTStudio"]
 edition = "2021"

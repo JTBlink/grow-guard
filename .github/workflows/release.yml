@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # --- 校验 tag 版本与 tauri.conf.json 一致(防止漏改版本号);手动触发跳过 ---
       - name: Verify version matches tag
@@ -33,8 +35,11 @@ jobs:
         run: bash scripts/ci/verify-version.sh
 
       # --- 工具链:Rust + tauri-cli + Node/pnpm ---
+      # 通用二进制需同时具备 x86_64 与 aarch64 两个目标
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
@@ -77,6 +82,43 @@ jobs:
           path: release-artifacts/*
           if-no-files-found: error
 
+      # --- git-cliff:从 Conventional Commits 生成本版 changelog ---
+      # content 用于 Release 正文;同时把完整 CHANGELOG.md 写回仓库(仅 tag 触发)。
+      - name: Generate changelog (release notes)
+        id: changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update CHANGELOG.md in repo
+        # 仅 tag 触发时回写完整 CHANGELOG.md 到默认分支(手动触发不污染仓库)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --output CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit CHANGELOG.md back to main
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "CHANGELOG.md 无变化,跳过提交"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${GITHUB_REF#refs/tags/}" || true
+          git checkout -B main
+          git add CHANGELOG.md
+          git commit -m "chore(release): 更新 CHANGELOG 至 ${GITHUB_REF_NAME}"
+          git push origin HEAD:main
+
       # --- 创建/更新 Release 并挂附件 ---
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || inputs.publish_release
@@ -88,8 +130,13 @@ jobs:
           files: release-artifacts/*
           draft: false
           prerelease: ${{ contains(steps.collect.outputs.version, '-') }}
-          generate_release_notes: true
+          # 用 git-cliff 生成的分类 changelog,不再叠加 GitHub 内置 notes
+          generate_release_notes: false
           body: |
+            ## 更新内容
+
+            ${{ steps.changelog.outputs.content }}
+
             ## 安装
 
             **未签名版本** —— 首次打开会被 macOS Gatekeeper 拦截,右键点 App 选「打开」即可放行(或在「系统设置 → 隐私与安全性」点「仍要打开」)。
@@ -100,4 +147,4 @@ jobs:
             | `GrowGuard-*.dmg` | 仅桌面 App,拖拽到「应用程序」;CLI/守护需另装 |
             | `GrowGuard-*-app.zip` | `.app` 压缩包(dmg 兜底) |
 
-            详见仓库内 [`docs/INSTALL.md`](../blob/v${{ steps.collect.outputs.version }}/docs/INSTALL.md)。
+            详见仓库内 [`docs/INSTALL.md`](${{ github.server_url }}/${{ github.repository }}/blob/v${{ steps.collect.outputs.version }}/docs/INSTALL.md)。

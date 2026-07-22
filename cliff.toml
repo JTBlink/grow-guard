@@ -1,0 +1,54 @@
+# git-cliff 配置 —— 基于 Conventional Commits 自动生成分类 changelog。
+# 文档: https://git-cliff.org/docs/configuration
+
+[changelog]
+# Release 正文与 CHANGELOG.md 共用的模板。
+header = """
+# 更新日志\n
+本文件由 [git-cliff](https://git-cliff.org) 依据 Conventional Commits 自动生成。\n
+"""
+# tera 模板:按 group 分组罗列提交。
+body = """
+{% if version %}\
+## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## 未发布
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}\
+- {{ commit.message | split(pat="\n") | first | trim }}{% if commit.id %} ({{ commit.id | truncate(length=7, end="") }}){% endif %}
+{% endfor %}\
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+# 只保留符合 Conventional Commits 的提交。
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+# type -> 分组标题(中文)。preprocessors 之后按 message 匹配。
+commit_parsers = [
+    { message = "^feat", group = "新功能" },
+    { message = "^fix", group = "缺陷修复" },
+    { message = "^docs", group = "文档" },
+    { message = "^perf", group = "性能" },
+    { message = "^refactor", group = "重构" },
+    { message = "^style", group = "样式" },
+    { message = "^test", group = "测试" },
+    { message = "^ci", group = "持续集成" },
+    { message = "^build", group = "构建" },
+    { message = "^chore\\(release\\):", skip = true },
+    { message = "^chore", group = "杂项" },
+    { message = "^revert", group = "回滚" },
+    { message = ".*", group = "其他" },
+]
+# 过滤掉不参与 changelog 的提交(如自动的 changelog 回写提交)。
+commit_preprocessors = []
+filter_commits = false
+# tag 匹配 vX.Y.Z
+tag_pattern = "v[0-9]*"
+# 按时间倒序
+sort_commits = "newest"

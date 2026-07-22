@@ -25,7 +25,10 @@ TOOL_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"          # grow-guard/
 DESKTOP_DIR="$TOOL_DIR/desktop"
 BACKEND_DIR="$TOOL_DIR/backend"
 DIST_DIR="$TOOL_DIR/dist"
-BUNDLE_DIR="$DESKTOP_DIR/src-tauri/target/release/bundle"
+# 目标架构:默认通用二进制(Intel + Apple Silicon 通吃)。
+# 可用 --target <triple> 覆盖(如 x86_64-apple-darwin / aarch64-apple-darwin)。
+TARGET="universal-apple-darwin"
+BUNDLE_DIR="$DESKTOP_DIR/src-tauri/target/$TARGET/release/bundle"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}✓${NC} $1"; }
@@ -43,12 +46,15 @@ for arg in "$@"; do
         --clean)    DO_CLEAN=1 ;;
         --no-dmg)   MAKE_DMG=0 ;;
         --pkg)      MAKE_PKG=1 ;;
+        --target=*) TARGET="${arg#*=}"; BUNDLE_DIR="$DESKTOP_DIR/src-tauri/target/$TARGET/release/bundle" ;;
         -h|--help)
-            echo "用法: $0 [--app-only] [--no-dmg] [--pkg] [--clean]"
-            echo "  默认:构建 .app + 打 .dmg + 组装 dist/"
-            echo "  --no-dmg   跳过 DMG(仅 .app + dist/)"
-            echo "  --pkg      额外生成 .pkg 引导安装包"
-            echo "  --app-only 只构建 .app,不打 dmg、不组装 dist/"
+            echo "用法: $0 [--app-only] [--no-dmg] [--pkg] [--clean] [--target=<triple>]"
+            echo "  默认:构建通用二进制(universal-apple-darwin,Intel+Apple Silicon) .app + .dmg + dist/"
+            echo "  --no-dmg        跳过 DMG(仅 .app + dist/)"
+            echo "  --pkg           额外生成 .pkg 引导安装包"
+            echo "  --app-only      只构建 .app,不打 dmg、不组装 dist/"
+            echo "  --target=<t>    指定架构(默认 universal-apple-darwin;"
+            echo "                  可选 x86_64-apple-darwin / aarch64-apple-darwin)"
             exit 0 ;;
         *) err "未知参数: $arg"; exit 1 ;;
     esac
@@ -92,10 +98,10 @@ build_desktop() {
         # 先清理可能的残留挂载/中间 dmg,降低 hdiutil 偶发失败
         hdiutil detach "/Volumes/青锁盾" 2>/dev/null || true
         find "$BUNDLE_DIR/macos" -maxdepth 1 -name 'rw.*.dmg' -delete 2>/dev/null || true
-        cargo tauri build
+        cargo tauri build --target "$TARGET"
     else
         info "构建桌面 App(React → Rust → .app)..."
-        cargo tauri build --bundles app
+        cargo tauri build --target "$TARGET" --bundles app
     fi
     ok "桌面 App 构建完成"
 }

@@ -20,7 +20,8 @@ fi
 
 OUT="release-artifacts"
 mkdir -p "$OUT"
-BUNDLE="desktop/src-tauri/target/release/bundle"
+# 通用二进制构建产物路径(与 build.sh 默认 TARGET 一致)
+BUNDLE="desktop/src-tauri/target/universal-apple-darwin/release/bundle"
 
 # .pkg(build.sh 已按 ASCII 命名 GrowGuard-<版本>.pkg)
 if [ -f "dist/GrowGuard-${VERSION}.pkg" ]; then
