@@ -38,11 +38,11 @@ fn cli_path() -> PathBuf {
     if installed.exists() {
         return installed;
     }
-    // 发布包内的后端资源。Tauri v2 把 `resources: ["../../backend"]` 里的 `../`
-    // 编码为 `_up_`,故实际落在 Resources/_up_/_up_/backend;这里覆盖多种可能位置。
+    // 发布包内的后端资源。新包通过资源映射放在 Resources/backend；同时保留
+    // Tauri v2 旧列表配置生成的 _up_ 路径，兼容既有构建目录和覆盖配置。
     if let Ok(exe) = std::env::current_exe() {
         if let Some(resources) = exe.parent().and_then(|p| p.parent()).map(|p| p.join("Resources")) {
-            for rel in ["_up_/_up_/backend/cli.py", "backend/cli.py"] {
+            for rel in ["backend/cli.py", "_up_/_up_/backend/cli.py"] {
                 let bundled = resources.join(rel);
                 if bundled.exists() {
                     return bundled;
@@ -940,4 +940,31 @@ pub fn run() {
                 _ => {}
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    #[test]
+    fn app_bundle_contains_complete_self_install_payload() {
+        let config: Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("tauri.conf.json must be valid JSON");
+        let resources = config
+            .pointer("/bundle/resources")
+            .and_then(Value::as_object)
+            .expect("bundle.resources must map source paths to stable App resource paths");
+
+        for (source, target) in [
+            ("../../backend", "backend"),
+            ("../../scripts/install.sh", "scripts/install.sh"),
+            ("../../grow-guard.sh", "grow-guard.sh"),
+        ] {
+            assert_eq!(
+                resources.get(source).and_then(Value::as_str),
+                Some(target),
+                "missing installer resource mapping: {source} -> {target}"
+            );
+        }
+    }
 }
