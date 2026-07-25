@@ -2,7 +2,7 @@
 
 本文件由 [git-cliff](https://git-cliff.org) 依据 Conventional Commits 自动生成。
 
-## 未发布
+## 1.1.1 - 2026-07-25
 
 ### 缺陷修复
 - 修复 macOS 26 启动崩溃与日志按钮权限 (9bc79ee)
