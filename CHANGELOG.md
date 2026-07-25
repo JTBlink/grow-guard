@@ -2,7 +2,7 @@
 
 本文件由 [git-cliff](https://git-cliff.org) 依据 Conventional Commits 自动生成。
 
-## 未发布
+## 1.1.2 - 2026-07-25
 
 ### 缺陷修复
 - 修复命令行与日志入口交互 (8fe7965)
