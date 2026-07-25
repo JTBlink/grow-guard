@@ -38,6 +38,14 @@ fn cli_path() -> PathBuf {
     if installed.exists() {
         return installed;
     }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(resources) = exe.parent().and_then(|p| p.parent()).map(|p| p.join("Resources")) {
+            let bundled = resources.join("backend/cli.py");
+            if bundled.exists() {
+                return bundled;
+            }
+        }
+    }
     repo
 }
 

@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_release:
-        description: "构建后是否创建 GitHub Release(默认否,仅产出 CI 附件)"
+        description: "始终执行构建;勾选后创建 GitHub Release,不勾选则只上传 Actions 附件"
         type: boolean
         default: false
 
