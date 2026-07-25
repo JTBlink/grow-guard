@@ -38,3 +38,7 @@ objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplicat
 rusqlite = { version = "0.32", features = ["bundled"] }
 dirs = "5"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+# 本地 patch tauri-runtime-wry:跳过 macOS 26 上会崩溃的 wry::webview_version() 调用(见 tauri#13996)
+[patch.crates-io]
+tauri-runtime-wry = { path = "../../vendor/tauri-runtime-wry-2.11.4" }
