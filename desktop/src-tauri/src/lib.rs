@@ -38,11 +38,15 @@ fn cli_path() -> PathBuf {
     if installed.exists() {
         return installed;
     }
+    // 发布包内的后端资源。Tauri v2 把 `resources: ["../../backend"]` 里的 `../`
+    // 编码为 `_up_`,故实际落在 Resources/_up_/_up_/backend;这里覆盖多种可能位置。
     if let Ok(exe) = std::env::current_exe() {
         if let Some(resources) = exe.parent().and_then(|p| p.parent()).map(|p| p.join("Resources")) {
-            let bundled = resources.join("backend/cli.py");
-            if bundled.exists() {
-                return bundled;
+            for rel in ["_up_/_up_/backend/cli.py", "backend/cli.py"] {
+                let bundled = resources.join(rel);
+                if bundled.exists() {
+                    return bundled;
+                }
             }
         }
     }
