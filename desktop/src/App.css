@@ -437,6 +437,17 @@ section h3:first-child { margin-top: 4px; }
   color: var(--text-mute);
   line-height: 1.5;
 }
+.help-diag + .help-diag {
+  margin-top: 12px;
+  padding-top: 0;
+  border-top: none;
+}
+.help-diag-msg {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
 
 /* ── 关于弹窗 ── */
 .modal-scrim {

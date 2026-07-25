@@ -92,6 +92,7 @@ jobs:
           args: --latest --strip header
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OUTPUT: RELEASE_NOTES.md
 
       - name: Update CHANGELOG.md in repo
         # 仅 tag 触发时回写完整 CHANGELOG.md 到默认分支(手动触发不污染仓库)

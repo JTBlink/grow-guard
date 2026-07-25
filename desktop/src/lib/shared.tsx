@@ -100,6 +100,18 @@ export async function runAdmin(
   });
 }
 
+export async function openTerminal(): Promise<void> {
+  await invoke("open_terminal");
+}
+
+export async function installCli(): Promise<string> {
+  return invoke<string>("install_cli");
+}
+
+export async function cliLinkStatus(): Promise<boolean> {
+  return invoke<boolean>("cli_link_status");
+}
+
 export function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="kv">

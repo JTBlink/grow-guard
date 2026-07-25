@@ -695,6 +695,68 @@ fn guard_admin(
     })
 }
 
+#[tauri::command]
+fn open_terminal() -> Result<(), String> {
+    let cli = "/usr/local/bin/grow-guard";
+    let prefill = if PathBuf::from(cli).exists() {
+        format!("sudo {} ", cli)
+    } else {
+        format!("sudo {} {} ", python_bin(), cli_path().to_string_lossy())
+    };
+    let script = format!(
+        "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
+        osa_esc(&prefill)
+    );
+    let out = Command::new("/usr/bin/osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| format!("无法打开终端: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn install_cli() -> Result<String, String> {
+    let target = "/Library/Application Support/GrowGuard/grow-guard.sh";
+    if !PathBuf::from(target).exists() {
+        return Err("未找到后端脚本,请先完成安装(sudo grow-guard install)".into());
+    }
+    let link = "/usr/local/bin/grow-guard";
+    let inner = format!(
+        "mkdir -p /usr/local/bin && ln -sf {} {} && chmod +x {}",
+        shq(target),
+        shq(link),
+        shq(target)
+    );
+    let script = format!(
+        "do shell script \"{}\" with administrator privileges",
+        osa_esc(&inner)
+    );
+    let out = Command::new("/usr/bin/osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| format!("无法执行 osascript: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if err.contains("-128") || err.contains("User canceled") {
+            return Err("已取消".into());
+        }
+        return Err(if err.is_empty() { "创建软链接失败".into() } else { err });
+    }
+    Ok(link.to_string())
+}
+
+#[tauri::command]
+fn cli_link_status() -> Result<bool, String> {
+    let link = PathBuf::from("/usr/local/bin/grow-guard");
+    let target = PathBuf::from("/Library/Application Support/GrowGuard/grow-guard.sh");
+    Ok(link.exists() && target.exists())
+}
+
 fn show_main(app: &tauri::AppHandle) {
     use std::sync::atomic::Ordering;
 
@@ -752,7 +814,10 @@ pub fn run() {
             list_apps,
             app_icon,
             system_usage,
-            guard_admin
+            guard_admin,
+            open_terminal,
+            install_cli,
+            cli_link_status
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]

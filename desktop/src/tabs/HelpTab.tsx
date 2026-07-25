@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { cliLinkStatus, installCli, openTerminal } from "../lib/shared";
 
 const FEATURES: { tab: string; accent: string; desc: string }[] = [
   { tab: "应用时长", accent: "var(--c-apps)", desc: "勾选应用设每日上限或直接禁用，并设定全天使用时段" },
@@ -14,11 +16,41 @@ const FAQS: { q: string; a: string }[] = [
 ];
 
 export function HelpTab() {
+  const [diag, setDiag] = useState("");
+  const [cliReady, setCliReady] = useState(false);
+
+  void cliLinkStatus()
+    .then(setCliReady)
+    .catch(() => setCliReady(false));
+
   const openLogs = async () => {
+    setDiag("");
+    const dir = "/Library/Application Support/GrowGuard/data";
     try {
-      await openPath("/Library/Application Support/GrowGuard/data");
+      await openPath(dir);
     } catch (e) {
-      console.error("打开日志目录失败", e);
+      setDiag(`打不开日志目录：${e}。若尚未运行「sudo grow-guard install」起守护进程，日志目录还不存在。`);
+    }
+  };
+
+  const setupCli = async () => {
+    setDiag("");
+    try {
+      const link = await installCli();
+      setCliReady(true);
+      setDiag(`命令行已就绪：终端里可直接运行 grow-guard（${link}）。`);
+    } catch (e) {
+      setDiag(`创建命令行软链接失败：${e}`);
+    }
+  };
+
+  const launchTerminal = async () => {
+    setDiag("");
+    try {
+      await openTerminal();
+      setDiag("已打开终端，并预填 sudo grow-guard 命令。若没弹出，请检查系统是否拦截了 Terminal 自动化。");
+    } catch (e) {
+      setDiag(`打开命令行失败：${e}`);
     }
   };
 
@@ -55,6 +87,22 @@ export function HelpTab() {
           打开日志目录
         </button>
       </div>
+
+      <div className="help-diag">
+        <span className="help-diag-text">
+          想用命令行管理？{cliReady ? "可直接打开终端并预填 grow-guard 命令。" : "一键创建 grow-guard 软链接到 /usr/local/bin。"}
+        </span>
+        {cliReady ? (
+          <button className="btn" onClick={launchTerminal}>
+            打开命令行
+          </button>
+        ) : (
+          <button className="btn" onClick={setupCli}>
+            快速安装命令行
+          </button>
+        )}
+      </div>
+      {diag && <div className="help-diag-msg">{diag}</div>}
     </section>
   );
 }
