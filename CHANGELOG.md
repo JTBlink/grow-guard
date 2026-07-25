@@ -2,6 +2,11 @@
 
 本文件由 [git-cliff](https://git-cliff.org) 依据 Conventional Commits 自动生成。
 
+## 1.1.3 - 2026-07-25
+
+### 缺陷修复
+- 修复发布包后端路径并补充卸载脚本 (f4dbce2)
+
 ## 1.1.2 - 2026-07-25
 
 ### 缺陷修复
