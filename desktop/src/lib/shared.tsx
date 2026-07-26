@@ -30,6 +30,7 @@ export function useDialog() {
 
 export function useStatus() {
   const [status, setStatus] = useState<GuardStatus | null>(null);
+  const [systemUsage, setSystemUsage] = useState<Record<string, number> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     if (!inTauri()) {
@@ -43,6 +44,7 @@ export function useStatus() {
       try {
         const usageRaw = await invoke<string>("system_usage");
         const usage = JSON.parse(usageRaw) as Record<string, number>;
+        setSystemUsage(usage);
         if (Object.keys(usage).length > 0) {
           s.usage_source = "knowledgeC";
           for (const a of s.apps) {
@@ -50,6 +52,7 @@ export function useStatus() {
           }
         }
       } catch {
+        setSystemUsage(null);
         /* Rust 读不到就用后端给的值 */
       }
       setStatus(s);
@@ -67,7 +70,7 @@ export function useStatus() {
       window.removeEventListener("focus", refresh);
     };
   }, [refresh]);
-  return { status, error, refresh };
+  return { status, systemUsage, error, refresh };
 }
 
 export type AlertFn = (message: string) => Promise<void>;
@@ -78,10 +81,20 @@ export type ExecAdmin = (
   opts?: { needsPassword?: boolean },
 ) => Promise<AdminResult | null>;
 
-// 今日用量文案:不足 1 分钟按秒显示(粒度 6 秒),否则取整到分钟。
+// 屏幕用量文案：按小时、分钟、秒拆分，只展示大于 0 的单位。
 export function fmtUsage(min: number): string {
-  if (min < 1) return `${Math.round(min * 60)} 秒`;
-  return `${min.toFixed(0)} 分钟`;
+  if (!Number.isFinite(min) || min <= 0) return "";
+  const totalSeconds = Math.round(min * 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [
+    hours > 0 ? `${hours} 小时` : "",
+    minutes > 0 ? `${minutes} 分钟` : "",
+    seconds > 0 ? `${seconds} 秒` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function isBadPassword(output: string): boolean {

@@ -1,5 +1,5 @@
 import { GuardStatus } from "../types";
-import { ExecAdmin, Row } from "../lib/shared";
+import { ExecAdmin, Row, fmtUsage } from "../lib/shared";
 
 export function StatusTab({
   status,
@@ -47,7 +47,7 @@ export function StatusTab({
               {a.blocked
                 ? "已禁用"
                 : a.daily_limit_min != null
-                  ? `${a.used_min.toFixed(0)} / ${a.daily_limit_min} 分钟`
+                  ? `${fmtUsage(a.used_min) || "—"} / ${fmtUsage(a.daily_limit_min)}`
                   : "仅追踪"}
             </span>
             <button className="btn small" onClick={() => removeLimit(a.bundle_id)}>

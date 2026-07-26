@@ -1,12 +1,5 @@
 import { GuardStatus } from "../types";
-
-export function fmtScreenTotal(min: number): string {
-  const m = Math.round(min);
-  if (m < 60) return `${m} 分钟`;
-  const h = Math.floor(m / 60);
-  const rest = m % 60;
-  return rest === 0 ? `${h} 小时` : `${h} 小时 ${rest} 分钟`;
-}
+import { fmtUsage } from "../lib/shared";
 
 export function StatusCard({
   status,
@@ -59,15 +52,16 @@ export function StatusCard({
       ? `当前允许使用（${sched.allow_start}–${sched.allow_end}）`
       : `当前时段外，受限应用已锁定（${sched.allow_start}–${sched.allow_end}）`
     : "全天守护中";
+  const totalUsage = totalScreenMin == null ? "" : fmtUsage(totalScreenMin);
 
   return (
     <div className="statuscard sc-on">
       <div className="sc-dot" aria-hidden />
       <div className="sc-body">
         <div className="sc-title">
-          今日屏幕总时长{" "}
+          屏幕总时长{" "}
           <span className="sc-figure">
-            {totalScreenMin == null ? "—" : fmtScreenTotal(totalScreenMin)}
+            {totalUsage || "—"}
           </span>
         </div>
         <div className="sc-sub">防护运行中 · {windowNote}</div>

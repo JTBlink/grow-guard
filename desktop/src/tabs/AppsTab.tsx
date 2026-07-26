@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { GuardStatus, InstalledApp } from "../types";
 import { AlertFn, ExecAdmin, fmtUsage } from "../lib/shared";
@@ -6,6 +6,7 @@ import { StatusCard } from "../components/StatusCard";
 
 export function AppsTab({
   status,
+  systemUsage,
   onChange,
   alert,
   execAdmin,
@@ -13,6 +14,7 @@ export function AppsTab({
   onEnable,
 }: {
   status: GuardStatus | null;
+  systemUsage: Record<string, number> | null;
   onChange: () => void;
   alert: AlertFn;
   execAdmin: ExecAdmin;
@@ -25,7 +27,6 @@ export function AppsTab({
   const [minutes, setMinutes] = useState("60");
   const [busy, setBusy] = useState(false);
   const [icons, setIcons] = useState<Record<string, string>>({});
-  const [totalScreenMin, setTotalScreenMin] = useState<number | null>(null);
 
   // Schedule state
   const [start, setStart] = useState(status?.schedule.allow_start ?? "07:00");
@@ -36,20 +37,6 @@ export function AppsTab({
       try {
         const raw = await invoke<string>("list_apps");
         const list = JSON.parse(raw) as InstalledApp[];
-        // 用量以 App 本体(有 FDA)直读的 Rust system_usage 为准:python 子进程无 FDA,
-        // list-apps 常拿不到 knowledgeC,故大批 App 缺用量。这里覆盖合并,保证全量准确。
-        try {
-          const usageRaw = await invoke<string>("system_usage");
-          const usage = JSON.parse(usageRaw) as Record<string, number>;
-          for (const a of list) {
-            const u = usage[a.bundle_id];
-            if (u != null) a.used_min = u;
-          }
-          const total = Object.values(usage).reduce((s, m) => s + m, 0);
-          setTotalScreenMin(Object.keys(usage).length > 0 ? total : null);
-        } catch {
-          /* 读不到就沿用 list-apps 自带的值 */
-        }
         list.sort(
           (a, b) => (b.used_min ?? 0) - (a.used_min ?? 0) || a.name.localeCompare(b.name),
         );
@@ -60,7 +47,25 @@ export function AppsTab({
     })();
   }, []);
 
-  const shown = apps.filter(
+  // systemUsage 由顶层 useStatus 统一维护：首次进入、每 5 秒以及窗口重新获得焦点时都会刷新。
+  // 应用列表只负责合并展示，避免此前组件首次挂载后一直保留旧系统用量。
+  const displayedApps = useMemo(
+    () =>
+      apps
+        .map((app) => ({
+          ...app,
+          used_min: systemUsage?.[app.bundle_id] ?? app.used_min,
+        }))
+        .sort(
+          (a, b) => (b.used_min ?? 0) - (a.used_min ?? 0) || a.name.localeCompare(b.name),
+        ),
+    [apps, systemUsage],
+  );
+  const totalScreenMin = useMemo(() => {
+    if (!systemUsage || Object.keys(systemUsage).length === 0) return null;
+    return Object.values(systemUsage).reduce((sum, minutes) => sum + minutes, 0);
+  }, [systemUsage]);
+  const shown = displayedApps.filter(
     (a) =>
       !filter ||
       a.name.toLowerCase().includes(filter.toLowerCase()) ||
@@ -86,7 +91,7 @@ export function AppsTab({
     return () => {
       cancelled = true;
     };
-  }, [filter, apps]);
+  }, [filter, displayedApps]);
 
   const toggle = (bid: string) => {
     const next = new Set(selected);
@@ -204,25 +209,26 @@ export function AppsTab({
         onChange={(e) => setFilter(e.target.value)}
       />
       <div className="applist applist-fill">
-        {shown.map((a) => (
-          <label key={a.bundle_id} className="appitem">
-            <input
-              type="checkbox"
-              checked={selected.has(a.bundle_id)}
-              onChange={() => toggle(a.bundle_id)}
-            />
-            {icons[a.bundle_id] ? (
-              <img className="app-ico" src={icons[a.bundle_id]} alt="" />
-            ) : (
-              <span className="app-ico placeholder" />
-            )}
-            <span className="appname">{a.name}</span>
-            <span className="mono small appbid">{a.bundle_id}</span>
-            {a.used_min != null && a.used_min > 0 && (
-              <span className="usage-badge">今日 {fmtUsage(a.used_min)}</span>
-            )}
-          </label>
-        ))}
+        {shown.map((a) => {
+          const usageText = fmtUsage(a.used_min ?? 0);
+          return (
+            <label key={a.bundle_id} className="appitem">
+              <input
+                type="checkbox"
+                checked={selected.has(a.bundle_id)}
+                onChange={() => toggle(a.bundle_id)}
+              />
+              {icons[a.bundle_id] ? (
+                <img className="app-ico" src={icons[a.bundle_id]} alt="" />
+              ) : (
+                <span className="app-ico placeholder" />
+              )}
+              <span className="appname">{a.name}</span>
+              <span className="mono small appbid">{a.bundle_id}</span>
+              {usageText && <span className="usage-badge">{usageText}</span>}
+            </label>
+          );
+        })}
         {shown.length === 0 && <p className="muted" style={{ padding: "8px 10px" }}>没有匹配的应用</p>}
       </div>
     </section>

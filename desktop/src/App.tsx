@@ -26,7 +26,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("apps");
   const [showAbout, setShowAbout] = useState(false);
   const [enabling, setEnabling] = useState(false);
-  const { status, error, refresh } = useStatus();
+  const { status, systemUsage, error, refresh } = useStatus();
   const { state: dialogState, alert, prompt, close } = useDialog();
   const protectedOn = !!status?.daemon_running;
 
@@ -121,6 +121,7 @@ export default function App() {
         {tab === "apps" && (
           <AppsTab
             status={status}
+            systemUsage={systemUsage}
             onChange={refresh}
             alert={alert}
             execAdmin={execAdmin}
