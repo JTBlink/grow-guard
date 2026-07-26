@@ -7,19 +7,23 @@ import { StatusCard } from "../components/StatusCard";
 export function AppsTab({
   status,
   systemUsage,
+  fullDiskAccess,
   onChange,
   alert,
   execAdmin,
   enabling,
   onEnable,
+  onGrantFullDiskAccess,
 }: {
   status: GuardStatus | null;
   systemUsage: Record<string, number> | null;
+  fullDiskAccess: boolean | null;
   onChange: () => void;
   alert: AlertFn;
   execAdmin: ExecAdmin;
   enabling: boolean;
   onEnable: () => void;
+  onGrantFullDiskAccess: () => void;
 }) {
   const [apps, setApps] = useState<InstalledApp[]>([]);
   const [filter, setFilter] = useState("");
@@ -54,7 +58,10 @@ export function AppsTab({
       apps
         .map((app) => ({
           ...app,
-          used_min: systemUsage?.[app.bundle_id] ?? app.used_min,
+          // 已拿到系统用量时统一使用同一口径；系统未记录的 App 按 0 处理，
+          // 不能沿用 list_apps 的旧轮询值，否则会造成新旧数据混排。
+          used_min:
+            systemUsage === null ? app.used_min : (systemUsage[app.bundle_id] ?? 0),
         }))
         .sort(
           (a, b) => (b.used_min ?? 0) - (a.used_min ?? 0) || a.name.localeCompare(b.name),
@@ -157,8 +164,10 @@ export function AppsTab({
         status={status}
         enabling={enabling}
         totalScreenMin={totalScreenMin}
+        fullDiskAccess={fullDiskAccess}
         onEnable={onEnable}
         onRelock={relock}
+        onGrantFullDiskAccess={onGrantFullDiskAccess}
       />
 
       <div className="actions">

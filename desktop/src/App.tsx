@@ -4,7 +4,16 @@ import { getVersion } from "@tauri-apps/api/app";
 import logoUrl from "./assets/logo.png";
 import "./App.css";
 
-import { useDialog, useStatus, runAdmin, isBadPassword, ExecAdmin } from "./lib/shared";
+import {
+  FULL_DISK_ACCESS_GUIDE,
+  ExecAdmin,
+  hasFullDiskAccess,
+  isBadPassword,
+  openFullDiskAccessSettings,
+  runAdmin,
+  useDialog,
+  useStatus,
+} from "./lib/shared";
 import { DialogHost } from "./components/DialogHost";
 import { AppsTab } from "./tabs/AppsTab";
 import { StatusTab } from "./tabs/StatusTab";
@@ -26,9 +35,14 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("apps");
   const [showAbout, setShowAbout] = useState(false);
   const [enabling, setEnabling] = useState(false);
-  const { status, systemUsage, error, refresh } = useStatus();
+  const { status, systemUsage, fullDiskAccess, error, refresh } = useStatus();
   const { state: dialogState, alert, prompt, close } = useDialog();
   const protectedOn = !!status?.daemon_running;
+
+  const guideFullDiskAccess = useCallback(async () => {
+    await alert(FULL_DISK_ACCESS_GUIDE);
+    await openFullDiskAccessSettings();
+  }, [alert]);
 
   // 会话内缓存家长密码:首个提权操作问一次,之后复用;密码错了才清缓存重问。
   const sessionPw = useRef<string | null>(null);
@@ -76,12 +90,18 @@ export default function App() {
     setEnabling(true);
     try {
       const res = await runAdmin(["install"], undefined, newPassword);
-      if (!res.ok) await alert(`启用失败: ${res.output || "已取消"}`);
-      refresh();
+      if (!res.ok) {
+        await alert(`启用失败: ${res.output || "已取消"}`);
+        return;
+      }
+      await refresh();
+      if (!(await hasFullDiskAccess())) {
+        await guideFullDiskAccess();
+      }
     } finally {
       setEnabling(false);
     }
-  }, [enabling, protectedOn, status, refresh, prompt, alert]);
+  }, [enabling, protectedOn, status, refresh, prompt, alert, guideFullDiskAccess]);
 
   useEffect(() => {
     const unRefresh = listen("menu://refresh", () => refresh());
@@ -96,6 +116,7 @@ export default function App() {
     <div className="app">
       <TopBar
         on={protectedOn}
+        fullDiskAccess={fullDiskAccess}
         enabling={enabling}
         onEnable={enableGuard}
         onAbout={() => setShowAbout(true)}
@@ -122,11 +143,13 @@ export default function App() {
           <AppsTab
             status={status}
             systemUsage={systemUsage}
+            fullDiskAccess={fullDiskAccess}
             onChange={refresh}
             alert={alert}
             execAdmin={execAdmin}
             enabling={enabling}
             onEnable={enableGuard}
+            onGrantFullDiskAccess={guideFullDiskAccess}
           />
         )}
         {tab === "sites" && (
@@ -146,11 +169,13 @@ export default function App() {
 
 function TopBar({
   on,
+  fullDiskAccess,
   enabling,
   onEnable,
   onAbout,
 }: {
   on: boolean;
+  fullDiskAccess: boolean | null;
   enabling: boolean;
   onEnable: () => void;
   onAbout: () => void;
@@ -168,23 +193,33 @@ function TopBar({
         <div className="brand-name">青锁盾</div>
         <div className="brand-sub">GROW GUARD</div>
       </div>
-      {on ? (
-        <span className="guard-pill on">
-          <span className="dot" />
-          防护中
-        </span>
-      ) : (
-        <button
-          type="button"
-          className="guard-pill clickable"
-          disabled={enabling}
-          onClick={onEnable}
-          title="点击启用后台守护进程"
-        >
-          <span className="dot" />
-          {enabling ? "启用中…" : "未启用 · 点击启用"}
-        </button>
-      )}
+      <div className="topbar-status">
+        {on ? (
+          <>
+            <span className="guard-pill on">
+              <span className="dot" />
+              防护中
+            </span>
+            {fullDiskAccess === true && (
+              <span className="guard-pill on" title="可读取系统屏幕使用时长">
+                <span className="dot" />
+                磁盘访问已开启
+              </span>
+            )}
+          </>
+        ) : (
+          <button
+            type="button"
+            className="guard-pill clickable"
+            disabled={enabling}
+            onClick={onEnable}
+            title="点击启用后台守护进程"
+          >
+            <span className="dot" />
+            {enabling ? "启用中…" : "未启用 · 点击启用"}
+          </button>
+        )}
+      </div>
     </header>
   );
 }

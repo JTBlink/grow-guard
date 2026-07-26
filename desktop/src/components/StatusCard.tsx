@@ -5,14 +5,18 @@ export function StatusCard({
   status,
   enabling,
   totalScreenMin,
+  fullDiskAccess,
   onEnable,
   onRelock,
+  onGrantFullDiskAccess,
 }: {
   status: GuardStatus | null;
   enabling: boolean;
   totalScreenMin: number | null;
+  fullDiskAccess: boolean | null;
   onEnable: () => void;
   onRelock: () => void;
+  onGrantFullDiskAccess: () => void;
 }) {
   if (!status) {
     return <div className="statuscard sc-idle"><div className="sc-body"><div className="sc-title">读取状态…</div></div></div>;
@@ -27,6 +31,20 @@ export function StatusCard({
         </div>
         <button className="btn primary sc-action" disabled={enabling} onClick={onEnable}>
           {enabling ? "启用中…" : "启用防护"}
+        </button>
+      </div>
+    );
+  }
+
+  if (fullDiskAccess === false) {
+    return (
+      <div className="statuscard sc-permission">
+        <div className="sc-body">
+          <div className="sc-title">还差一步：开启完全磁盘访问</div>
+          <div className="sc-sub">防护已运行；完成授权后即可显示系统屏幕使用时长。</div>
+        </div>
+        <button className="btn sc-action sc-permission-action" onClick={onGrantFullDiskAccess}>
+          立即授权
         </button>
       </div>
     );

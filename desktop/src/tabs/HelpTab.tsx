@@ -6,11 +6,11 @@ const FEATURES: { tab: string; accent: string; desc: string }[] = [
   { tab: "应用时长", accent: "var(--c-apps)", desc: "勾选应用设每日上限或直接禁用，并设定全天使用时段" },
   { tab: "概览", accent: "var(--c-status)", desc: "查看防护状态与今日已限制的应用" },
   { tab: "网站", accent: "var(--c-sites)", desc: "按域名屏蔽网站，hosts + 防火墙双层生效" },
-  { tab: "解锁 / 密码", accent: "var(--c-unlock)", desc: "临时放行、修改家长密码、授予完全磁盘访问" },
+  { tab: "解锁 / 密码", accent: "var(--c-unlock)", desc: "临时放行和修改家长密码" },
 ];
 
 const FAQS: { q: string; a: string }[] = [
-  { q: "用量显示不准？", a: "到「解锁 / 密码」授予完全磁盘访问，即可读取系统精确用量。" },
+  { q: "用量显示不准？", a: "按「应用时长」页顶部提示授予完全磁盘访问，即可读取系统精确用量。" },
   { q: "到点会强制关闭应用吗？", a: "不会。只会温和锁定、隐藏到后台，不丢数据。" },
   { q: "哪些操作要家长密码？", a: "放松限制才需要——解锁、改限额、卸载。加限制无需密码。" },
 ];

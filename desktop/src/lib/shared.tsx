@@ -6,6 +6,19 @@ export function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+export const FULL_DISK_ACCESS_GUIDE =
+  "要显示系统屏幕使用时长，需要授予完全磁盘访问。\n\n" +
+  "点击“好”后，请在列表中找到并开启“青锁盾”；如果列表中没有，点击“+”添加 /Applications/青锁盾.app。\n\n" +
+  "授权后请按系统提示退出并重新打开青锁盾。";
+
+export async function hasFullDiskAccess(): Promise<boolean> {
+  return invoke<boolean>("has_full_disk_access");
+}
+
+export async function openFullDiskAccessSettings(): Promise<void> {
+  await invoke("open_full_disk_access_settings");
+}
+
 // macOS WKWebView(wry)不实现 JS 的 alert/confirm/prompt 面板,window.prompt() 会直接返回 null,
 // 导致所有"输入密码"操作静默失败。因此这里用应用内 React 弹窗替代原生对话框。
 export type PromptOpts = { message: string; password?: boolean; confirmMessage?: string };
@@ -31,6 +44,7 @@ export function useDialog() {
 export function useStatus() {
   const [status, setStatus] = useState<GuardStatus | null>(null);
   const [systemUsage, setSystemUsage] = useState<Record<string, number> | null>(null);
+  const [fullDiskAccess, setFullDiskAccess] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(async () => {
     if (!inTauri()) {
@@ -40,20 +54,29 @@ export function useStatus() {
     try {
       const raw = await invoke<string>("guard_status");
       const s = JSON.parse(raw) as GuardStatus;
-      // App 自己读 knowledgeC(Rust),这样 FDA 面板显示"青锁盾"而非 python
+      // 先由 App 本体确认 FDA，再读 knowledgeC；权限缺失和“今天确实无用量”不再混为一谈。
+      let hasAccess = false;
       try {
-        const usageRaw = await invoke<string>("system_usage");
-        const usage = JSON.parse(usageRaw) as Record<string, number>;
-        setSystemUsage(usage);
-        if (Object.keys(usage).length > 0) {
+        hasAccess = await hasFullDiskAccess();
+      } catch {
+        hasAccess = false;
+      }
+      setFullDiskAccess(hasAccess);
+      if (hasAccess) {
+        try {
+          const usageRaw = await invoke<string>("system_usage");
+          const usage = JSON.parse(usageRaw) as Record<string, number>;
+          setSystemUsage(usage);
           s.usage_source = "knowledgeC";
           for (const a of s.apps) {
             if (usage[a.bundle_id] != null) a.used_min = usage[a.bundle_id];
           }
+        } catch {
+          setSystemUsage(null);
         }
-      } catch {
+      } else {
         setSystemUsage(null);
-        /* Rust 读不到就用后端给的值 */
+        s.usage_source = "poll";
       }
       setStatus(s);
       setError(null);
@@ -70,7 +93,7 @@ export function useStatus() {
       window.removeEventListener("focus", refresh);
     };
   }, [refresh]);
-  return { status, systemUsage, error, refresh };
+  return { status, systemUsage, fullDiskAccess, error, refresh };
 }
 
 export type AlertFn = (message: string) => Promise<void>;

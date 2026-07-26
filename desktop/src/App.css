@@ -39,8 +39,16 @@
   font-weight: 500;
 }
 
-.guard-pill {
+.topbar-status {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.guard-pill {
+  margin-left: 0;
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
@@ -122,6 +130,10 @@
   border-left: 3px solid var(--sc-accent, var(--card-border));
 }
 .sc-off   { --sc-accent: var(--danger); }
+.sc-permission {
+  --sc-accent: var(--warn);
+  background: linear-gradient(90deg, var(--warn-bg), var(--card) 46%);
+}
 .sc-grace { --sc-accent: var(--warn); }
 .sc-on    { --sc-accent: var(--safe); }
 .sc-idle  { --sc-accent: var(--text-mute); }
@@ -132,6 +144,7 @@
 .sc-sub { font-size: 12px; color: var(--text-mute); margin-top: 2px; line-height: 1.45; }
 
 .sc-off .sc-title { color: var(--danger); }
+.sc-permission .sc-title { color: var(--warn); }
 .sc-grace .sc-title { color: var(--warn); }
 
 .sc-dot {
@@ -144,6 +157,13 @@
 }
 
 .sc-action { flex: none; white-space: nowrap; padding: 5px 14px; }
+.sc-permission-action {
+  color: #fff;
+  background: var(--warn);
+  border-color: transparent;
+  font-weight: 600;
+}
+.sc-permission-action:hover:not(:disabled) { filter: brightness(0.96); }
 
 /* ── 内容面板 ── */
 .panel {

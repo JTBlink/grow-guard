@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { AlertFn, ExecAdmin, PromptOpts, isBadPassword, runAdmin } from "../lib/shared";
+import {
+  AlertFn,
+  ExecAdmin,
+  PromptOpts,
+  isBadPassword,
+  runAdmin,
+} from "../lib/shared";
 
 export function UnlockTab({
   onChange,
@@ -28,10 +34,6 @@ export function UnlockTab({
     if (r === null) return;
     onChange();
   };
-  const grantFda = async () => {
-    await runAdmin(["grant-fda"]);
-  };
-
   const changePassword = async () => {
     const oldPw = await prompt({ message: "请输入当前家长密码", password: true });
     if (oldPw === null) return;
@@ -75,11 +77,6 @@ export function UnlockTab({
           修改家长密码
         </button>
       </div>
-
-      <h3>系统精确用量</h3>
-      <button className="btn" onClick={grantFda}>
-        引导授予完全磁盘访问
-      </button>
     </section>
   );
 }

@@ -604,6 +604,38 @@ fn b64(data: &[u8]) -> String {
 // 系统用量:Rust 本体直读 knowledgeC(而非 spawn python),
 // 这样发起 TCC 调用的是青锁盾.app 自己 -> FDA 授权面板显示"青锁盾"而非 python3。
 // 返回 {bundle_id: 今日分钟} 的 JSON;无 FDA/读取失败返回 "{}"。
+const FDA_SETTINGS_URL: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
+
+#[tauri::command]
+fn has_full_disk_access() -> bool {
+    let Some(db) = knowledgec_path() else {
+        return false;
+    };
+    let uri = format!("file:{}?mode=ro&immutable=1", db.to_string_lossy());
+    let Ok(conn) = rusqlite::Connection::open_with_flags(
+        &uri,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    ) else {
+        return false;
+    };
+    conn.query_row("SELECT 1 FROM ZOBJECT LIMIT 1", [], |_| Ok(()))
+        .is_ok()
+}
+
+#[tauri::command]
+fn open_full_disk_access_settings() -> Result<(), String> {
+    let status = Command::new("/usr/bin/open")
+        .arg(FDA_SETTINGS_URL)
+        .status()
+        .map_err(|e| format!("无法打开完全磁盘访问设置: {e}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("无法打开完全磁盘访问设置".into())
+    }
+}
+
 #[tauri::command]
 fn system_usage() -> Result<String, String> {
     let db = knowledgec_path();
@@ -825,6 +857,8 @@ pub fn run() {
             guard_status,
             list_apps,
             app_icon,
+            has_full_disk_access,
+            open_full_disk_access_settings,
             system_usage,
             guard_admin,
             open_terminal,
