@@ -69,7 +69,14 @@ export function useStatus() {
           setSystemUsage(usage);
           s.usage_source = "knowledgeC";
           for (const a of s.apps) {
-            if (usage[a.bundle_id] != null) a.used_min = usage[a.bundle_id];
+            if (usage[a.bundle_id] != null) {
+              a.used_min = Math.max(a.used_min, usage[a.bundle_id]);
+            }
+            const overLimit =
+              a.daily_limit_min != null && a.used_min >= a.daily_limit_min;
+            const outsideWindow = s.schedule.enabled && !s.schedule.in_window;
+            a.locked =
+              !s.grace_active && (a.blocked || outsideWindow || overLimit);
           }
         } catch {
           setSystemUsage(null);

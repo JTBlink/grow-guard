@@ -115,11 +115,14 @@ fn lock_reason_for(bundle_id: &str) -> Option<String> {
     if out_of_window {
         return Some("当前不在允许使用时段".to_string());
     }
-    // 时长上限:读 state.json 今日用量,>= 上限则锁。
-    // 关键:只有 state.date == 今天 才采用其用量;否则(跨天未重置/守护未写)视为今日 0min,
-    // 避免拿昨天的旧用量把今天误锁(此前 "没到量也锁了" 的根因)。
+    // 时长上限:系统 knowledgeC 与守护轮询取较大值,>= 上限则锁。
+    // 轮询值只有 state.date == 今天才采用,避免拿昨天的旧用量把今天误锁;
+    // 系统值与界面展示同源,避免出现界面已远超上限、判定仍按低轮询值放行。
     if let Some(limit) = rule.get("daily_limit_min").and_then(|x| x.as_f64()) {
-        let used = read_used_min(&dir, bundle_id);
+        let poll_used = read_used_min(&dir, bundle_id);
+        let system_used = cached_system_usage_today()
+            .and_then(|usage| usage.get(bundle_id).copied());
+        let used = effective_used_min(poll_used, system_used);
         if used >= limit {
             return Some(format!(
                 "今日使用时长已用完(上限 {:.0} 分钟,已用 {:.1} 分钟)",
@@ -152,10 +155,59 @@ fn read_used_min(dir: &std::path::Path, bundle_id: &str) -> f64 {
         .unwrap_or(0.0)
 }
 
+fn effective_used_min(poll_used: f64, system_used: Option<f64>) -> f64 {
+    match system_used.filter(|used| used.is_finite()) {
+        Some(used) => poll_used.max(used),
+        None => poll_used,
+    }
+}
+
+fn tail_file_lines(path: &std::path::Path, limit: usize) -> std::io::Result<Vec<String>> {
+    let text = std::fs::read_to_string(path)?;
+    let mut lines: Vec<String> = text
+        .lines()
+        .rev()
+        .take(limit)
+        .map(str::to_string)
+        .collect();
+    lines.reverse();
+    Ok(lines)
+}
+
+#[derive(Serialize)]
+struct DiagnosticLogs {
+    desktop: Vec<String>,
+    daemon: Vec<String>,
+}
+
+fn diagnostic_logs_from_path(daemon_log: &std::path::Path, limit: usize) -> DiagnosticLogs {
+    DiagnosticLogs {
+        desktop: logger::recent(limit),
+        daemon: tail_file_lines(daemon_log, limit).unwrap_or_default(),
+    }
+}
+
+#[tauri::command]
+fn diagnostic_logs() -> DiagnosticLogs {
+    diagnostic_logs_from_path(&data_dir().join("guard.log"), 200)
+}
+
+#[tauri::command]
+fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "找不到主窗口".to_string())?;
+    window.open_devtools();
+    Ok(())
+}
+
 // 切换焦点时打印该 App 今日使用时长(不依赖是否设了上限,始终打印),便于实时观察用量。
 fn log_usage_on_focus(bundle_id: &str, app_name: &str) {
     let dir = data_dir();
-    let used = read_used_min(&dir, bundle_id);
+    let poll_used = read_used_min(&dir, bundle_id);
+    let system_used = cached_system_usage_today()
+        .and_then(|usage| usage.get(bundle_id).copied());
+    let used = effective_used_min(poll_used, system_used);
     let limit = read_json(&dir.join("config.json"))
         .and_then(|cfg| {
             cfg.get("apps")
@@ -165,13 +217,21 @@ fn log_usage_on_focus(bundle_id: &str, app_name: &str) {
         });
     match limit {
         Some(lim) => glog!(
-            "[用量] {app_name} ({bundle_id}) 今日已用 {:.1} 分钟 / 上限 {:.0} 分钟 ({})",
+            "[用量] {app_name} ({bundle_id}) 系统={} / 轮询={:.1} / 生效={:.1} 分钟 / 上限 {:.0} 分钟 ({})",
+            system_used
+                .map(|value| format!("{value:.1}"))
+                .unwrap_or_else(|| "不可用".to_string()),
+            poll_used,
             used,
             lim,
             if used >= lim { "已达上限" } else { "未达上限" }
         ),
         None => glog!(
-            "[用量] {app_name} ({bundle_id}) 今日已用 {:.1} 分钟 / 未设上限",
+            "[用量] {app_name} ({bundle_id}) 系统={} / 轮询={:.1} / 生效={:.1} 分钟 / 未设上限",
+            system_used
+                .map(|value| format!("{value:.1}"))
+                .unwrap_or_else(|| "不可用".to_string()),
+            poll_used,
             used
         ),
     }
@@ -638,11 +698,44 @@ fn open_full_disk_access_settings() -> Result<(), String> {
 
 #[tauri::command]
 fn system_usage() -> Result<String, String> {
-    let db = knowledgec_path();
-    let db = match db {
-        Some(p) => p,
-        None => return Ok("{}".into()),
-    };
+    let usage = cached_system_usage_today().unwrap_or_default();
+    serde_json::to_string(&usage).map_err(|e| format!("无法序列化系统用量: {e}"))
+}
+
+type SystemUsageMap = std::collections::HashMap<String, f64>;
+
+#[derive(Default)]
+struct SystemUsageCache {
+    fetched_at: Option<std::time::Instant>,
+    usage: Option<SystemUsageMap>,
+}
+
+static SYSTEM_USAGE_CACHE: std::sync::OnceLock<std::sync::Mutex<SystemUsageCache>> =
+    std::sync::OnceLock::new();
+
+fn cached_system_usage_today() -> Option<SystemUsageMap> {
+    const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(2);
+    let cache = SYSTEM_USAGE_CACHE
+        .get_or_init(|| std::sync::Mutex::new(SystemUsageCache::default()));
+    if let Ok(current) = cache.lock() {
+        if current
+            .fetched_at
+            .is_some_and(|fetched| fetched.elapsed() < CACHE_TTL)
+        {
+            return current.usage.clone();
+        }
+    }
+
+    let fresh = read_system_usage_today();
+    if let Ok(mut current) = cache.lock() {
+        current.fetched_at = Some(std::time::Instant::now());
+        current.usage = fresh.clone();
+    }
+    fresh
+}
+
+fn read_system_usage_today() -> Option<SystemUsageMap> {
+    let db = knowledgec_path()?;
     let mac_epoch = 978_307_200i64;
     // 本地时区的今日零点(不能用 UTC 对齐,否则东八区会差 8 小时漏掉早上的用量)
     use chrono::{Datelike, Local, TimeZone, Timelike};
@@ -659,27 +752,26 @@ fn system_usage() -> Result<String, String> {
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
     ) {
         Ok(c) => c,
-        Err(_) => return Ok("{}".into()),
+        Err(_) => return None,
     };
     let sql = "SELECT ZVALUESTRING, SUM(ZENDDATE - ZSTARTDATE) FROM ZOBJECT \
                WHERE ZSTREAMNAME = '/app/usage' AND ZSTARTDATE >= ?1 GROUP BY ZVALUESTRING";
-    let mut map = serde_json::Map::new();
-    if let Ok(mut stmt) = conn.prepare(sql) {
-        let rows = stmt.query_map([start_of_day as f64], |r| {
+    let mut map = SystemUsageMap::new();
+    let mut stmt = conn.prepare(sql).ok()?;
+    let rows = stmt
+        .query_map([start_of_day as f64], |r| {
             Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<f64>>(1)?))
-        });
-        if let Ok(rows) = rows {
-            for row in rows.flatten() {
-                if let (Some(bid), Some(secs)) = row {
-                    if !bid.is_empty() && secs > 0.0 {
-                        let mins = (secs / 60.0 * 10.0).round() / 10.0;
-                        map.insert(bid, serde_json::json!(mins));
-                    }
-                }
+        })
+        .ok()?;
+    for row in rows.flatten() {
+        if let (Some(bid), Some(secs)) = row {
+            if !bid.is_empty() && secs > 0.0 {
+                let mins = (secs / 60.0 * 10.0).round() / 10.0;
+                map.insert(bid, mins);
             }
         }
     }
-    Ok(serde_json::Value::Object(map).to_string())
+    Some(map)
 }
 
 fn knowledgec_path() -> Option<PathBuf> {
@@ -860,6 +952,8 @@ pub fn run() {
             has_full_disk_access,
             open_full_disk_access_settings,
             system_usage,
+            diagnostic_logs,
+            open_devtools,
             guard_admin,
             open_terminal,
             install_cli,
@@ -978,6 +1072,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use serde_json::Value;
 
     #[test]
@@ -1000,5 +1095,49 @@ mod tests {
                 "missing installer resource mapping: {source} -> {target}"
             );
         }
+    }
+
+    #[test]
+    fn effective_usage_prefers_the_larger_system_value() {
+        assert_eq!(effective_used_min(0.5838, Some(107.2)), 107.2);
+        assert_eq!(effective_used_min(4.5, Some(3.0)), 4.5);
+        assert_eq!(effective_used_min(4.5, None), 4.5);
+    }
+
+    #[test]
+    fn tail_file_lines_keeps_only_the_newest_lines() {
+        let path = std::env::temp_dir().join(format!(
+            "grow-guard-tail-test-{}-{}.log",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("unnamed")
+        ));
+        std::fs::write(&path, "one\ntwo\nthree\nfour\n").expect("write fixture");
+
+        let lines = tail_file_lines(&path, 2).expect("read log tail");
+
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(lines, vec!["three".to_string(), "four".to_string()]);
+    }
+
+    #[test]
+    fn diagnostic_logs_separate_desktop_and_daemon_sources() {
+        let marker = format!("diagnostic-marker-{}", std::process::id());
+        logger::log(logger::Level::Info, &marker);
+        let path = std::env::temp_dir().join(format!(
+            "grow-guard-diagnostic-test-{}.log",
+            std::process::id()
+        ));
+        std::fs::write(&path, "daemon-one\ndaemon-two\n").expect("write daemon fixture");
+
+        let logs = diagnostic_logs_from_path(&path, 20);
+        let missing = diagnostic_logs_from_path(&path.with_extension("missing"), 20);
+
+        let _ = std::fs::remove_file(&path);
+        assert!(logs.desktop.iter().any(|line| line.contains(&marker)));
+        assert_eq!(
+            logs.daemon,
+            vec!["daemon-one".to_string(), "daemon-two".to_string()]
+        );
+        assert!(missing.daemon.is_empty());
     }
 }
