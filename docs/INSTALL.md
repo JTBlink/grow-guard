@@ -96,5 +96,6 @@ sudo rm -rf /Applications/GrowGuard.app
 | 现象 | 处理 |
 |------|------|
 | `status` 报权限/篡改 | 守护以 root 运行;非 root 只读展示。配置被改会 fail-closed 继续锁定 |
-| `grant-fda` 后用量仍为估算 | 在系统设置 → 隐私 → 完全磁盘访问 里手动勾选运行程序 |
+| `grant-fda` 后用量仍为估算 | 在系统设置 → 隐私 → 完全磁盘访问里手动勾选「青锁盾」,再按系统提示退出并重新打开 App |
+| 需要查看切换/限额判定过程 | 打开桌面 App → 帮助 → 开发者模式,切换「桌面切换 / 后台守护」日志来源 |
 | 卸载后残留 | `sudo rm -rf "/Library/Application Support/GrowGuard" /usr/local/bin/grow-guard` |

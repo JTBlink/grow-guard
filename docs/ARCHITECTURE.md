@@ -10,7 +10,7 @@ macOS 端家长控制工具:**应用限时 + 网站过滤 + 时间窗 + 家长�
 
 提供两种交互形态,共享同一 Python 核心:
 - **CLI**(`grow-guard`)—— 零依赖,可脚本化,守护进程也走它。
-- **桌面 App**(Tauri + React)—— 图形面板,通过调用 CLI 复用全部逻辑。
+- **桌面 App**(Tauri + React)—— 图形面板,通过 CLI 复用策略配置,并在用户会话内负责焦点监听、精确用量判定与遮罩展示。
 
 ## 2. 分层架构
 
@@ -20,6 +20,8 @@ macOS 端家长控制工具:**应用限时 + 网站过滤 + 时间窗 + 家长�
 │  React + TS (前端 UI)                         │
 │        │  invoke (IPC)                        │
 │  src-tauri/ Rust 桥接层                       │
+│        │  NSWorkspace 焦点监听 / 全屏遮罩       │
+│        │  knowledgeC 用量 / 内存诊断日志        │
 │        │  spawn: python3 backend/cli.py …     │
 │        │  提权: osascript with admin           │
 └────────┼─────────────────────────────────────┘
@@ -39,9 +41,12 @@ macOS 端家长控制工具:**应用限时 + 网站过滤 + 时间窗 + 家长�
 └─────────────────────────────────────────────┘
 ```
 
-**关键点:GUI 不重复实现任何策略逻辑。** Tauri 侧只做两件事:
-1. 展示状态(读 `cli.py status --json`);
-2. 触发"放松限制"操作时,经 `osascript ... with administrator privileges` 以 root 跑 `cli.py <子命令>`,家长密码走环境变量 `GROW_GUARD_PW`(不进 argv)。
+**关键点:策略配置只有一份,会话执行分两层。**
+1. Python `Guard` 统一管理配置、签名、密码、时间窗和守护轮询状态;
+2. root LaunchDaemon 负责持续轮询、隐藏兜底、网站规则与 fail-closed;
+3. Tauri Rust 层在登录用户会话内用 `NSWorkspace` 获取可靠的前台 App,读取同一份只读配置并驱动全屏遮罩;
+4. 获得完全磁盘访问时,前台限额判定取 `max(knowledgeC 系统用量, state.json 轮询用量)`,未授权时回退到轮询;
+5. 管理操作仍通过 `osascript ... with administrator privileges` 以 root 执行 `cli.py`,家长密码走环境变量 `GROW_GUARD_PW`(不进 argv)。
 
 ## 3. 目录结构
 
@@ -54,8 +59,9 @@ grow-guard/
 │   └── daemon.py          # root 守护进程(轮询 + 自校验 + fail-closed)
 ├── desktop/               # Tauri 桌面端
 │   ├── src/               # React + TS 前端
-│   ├── src-tauri/         # Rust 桥接层(调用 CLI)
-│   │   ├── src/lib.rs     # guard_status / list_apps / guard_admin 命令
+│   ├── src-tauri/         # Rust 桥接层 + 用户会话执行层
+│   │   ├── src/lib.rs     # CLI 命令、焦点监听、用量判定、遮罩与诊断命令
+│   │   ├── src/logger.rs  # stderr + 最近 300 条桌面端内存日志
 │   │   └── tauri.conf.json
 │   ├── package.json
 │   └── vite.config.ts
@@ -78,7 +84,7 @@ grow-guard/
     ├── state.json    今日用量(HMAC 签名,跨天重置,0644)
     ├── auth.json     家长密码 PBKDF2 哈希(root only,0600)
     ├── guard.key     HMAC 密钥(0600)
-    └── guard.log
+    └── guard.log      root 守护进程日志(帮助页开发者模式可只读查看)
 /usr/local/bin/grow-guard   -> grow-guard.sh(PATH 入口软链)
 /Library/LaunchDaemons/com.jtstudio.grow-guard.plist
 /etc/pf.anchors/grow-guard
@@ -90,7 +96,7 @@ grow-guard/
 | 层 | 选型 | 理由 |
 |----|------|------|
 | 核心 | Python 3 stdlib | 零第三方依赖,macOS 自带;守护/CLI/GUI 共用 |
-| 桌面壳 | Tauri (Rust) | 体积小、原生窗口;Rust 侧只做 CLI 桥接,不含策略 |
+| 桌面壳 | Tauri (Rust) | 体积小、原生窗口;可在用户会话内可靠监听焦点、读取 knowledgeC 并展示全屏遮罩 |
 | 前端 | React + TS | 选卡式面板、App 勾选列表等交互 |
 | 提权 | osascript admin | 复用系统原生授权框,不自建 setuid/服务 |
 | GUI↔核心 | 调 CLI + `--json` | 复用全部 Python 逻辑,避免双份实现 |
@@ -110,6 +116,10 @@ grow-guard/
 |----------------------|------|:---:|------|
 | `guard_status` | `cli.py status --json` | 否 | 读状态(前端渲染) |
 | `list_apps` | `cli.py list-apps --json` | 否 | 已安装 App 列表(勾选限制) |
+| `has_full_disk_access` | Rust 直读 knowledgeC | 否 | 判断桌面 App 是否已获得完全磁盘访问 |
+| `system_usage` | Rust 直读 knowledgeC | 否 | 返回今日系统级 App 用量,并供限额判定复用 |
+| `diagnostic_logs` | 内存日志 + `guard.log` | 否 | 返回桌面切换/判定日志与后台守护日志 |
+| `open_devtools` | Tauri WebView | 否 | 从帮助页开发者模式打开 DevTools |
 | `guard_admin(args, pw)` | `cli.py <args>` | 是(osascript) | limit/lock-app/block-site/unlock/schedule/… |
 
 CLI 路径解析优先级(`lib.rs::cli_path`):`GROW_GUARD_CLI` 环境变量 → 已安装副本 `/Library/Application Support/GrowGuard/backend/cli.py` → 开发期仓库内 `../../backend/cli.py`。

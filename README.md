@@ -56,7 +56,7 @@ sudo grow-guard schedule --start 07:00 --end 21:30    # 只允许这段时间使
 # 3. 查看状态(只读,无需密码)
 grow-guard status
 
-# (可选)引导授予完全磁盘访问,让 status 显示系统精确用量
+# (可选)引导授予完全磁盘访问,让桌面 App 显示并按系统精确用量判定限额
 grow-guard grant-fda
 ```
 
@@ -77,7 +77,7 @@ grow-guard grant-fda
 | `unlock [分钟]` | 临时解锁,暂停所有限制(默认 15 分钟) | ✓ |
 | `relock` | 立即结束临时解锁 | ✓ |
 | `status` | 查看配置与今日用量 | — |
-| `grant-fda` | 引导授予完全磁盘访问(让 status 显示系统精确用量) | — |
+| `grant-fda` | 引导授予完全磁盘访问(桌面 App 显示并按系统精确用量判定限额) | — |
 
 `<app>` 可以是:App 名称(`Safari`)、完整路径(`/Applications/Safari.app`)、或 bundle id(`com.apple.Safari`)。
 
@@ -92,7 +92,7 @@ grow-guard/
 │   └── daemon.py              # 守护进程(轮询巡检 + 自校验 + 篡改 fail-closed)
 ├── desktop/                   # Tauri 桌面端(React + TS 前端 + Rust 桥接)
 │   ├── src/                   # React UI
-│   ├── src-tauri/             # Rust 桥接层(调用 backend/cli.py)
+│   ├── src-tauri/             # Rust 桥接层 + 焦点监听/遮罩判定/诊断日志
 │   ├── package.json
 │   └── vite.config.ts
 ├── scripts/
@@ -140,7 +140,7 @@ grow-guard/
 
 **临时解锁**(`unlock N`)给一段宽限期,期间所有 App 与网站限制暂停,到期自动恢复。
 
-**关于系统精确用量(knowledgeC)**:`status` 默认用轮询估算用量(±30s);若家长运行 `grow-guard grant-fda` 授予「完全磁盘访问」,则改读系统 `knowledgeC.db` 显示精确历史用量。这**仅用于展示**,实时拦截始终靠轮询,不依赖 FDA —— 因为 FDA 无法脚本静默授予(Apple 限制),不能作为强制手段。
+**关于系统精确用量(knowledgeC)**:`status` 默认使用守护进程记录的前台驻留轮询值;桌面 App 获得「完全磁盘访问」后会读取系统 `knowledgeC.db`。界面展示与前台限额判定都取「系统用量、轮询用量」中的较大值,因此不会再出现界面已经超过限额、实际判定仍按较低轮询值放行的情况。未授权或数据库不可读时会自动回退到轮询,不会把 FDA 作为强制依赖。
 
 ## 图形面板(GUI)
 
@@ -153,7 +153,7 @@ pnpm tauri dev        # 开发调试
 pnpm tauri build      # 打包 .app / .dmg
 ```
 
-Tauri 侧不含策略逻辑,只调用 `backend/cli.py`(只读走 `status --json`,放松限制走 osascript 提权)。构建需 Rust + Node 工具链(仅开发机需要,终端设备不需要)。App 内含「应用限制 / 网站 / 时间窗 / 解锁·密码」等面板,「应用限制」会扫描已安装 App 列表,勾选后一键限制或禁用,无需记 bundle id。
+策略配置、密码与签名校验仍由 Python 核心统一管理;Tauri 侧调用 `backend/cli.py` 完成状态读取和管理操作,同时在用户会话内用 `NSWorkspace` 监听前台 App、按有效用量驱动全屏遮罩。构建需 Rust + Node 工具链(仅开发机需要,终端设备不需要)。App 内含「应用限制 / 网站 / 时间窗 / 解锁·密码」等面板,「应用限制」会扫描已安装 App 列表,勾选后一键限制或禁用,无需记 bundle id。帮助页的「开发者模式」可查看桌面切换/限额判定日志与后台守护日志,并可直接打开 DevTools。
 
 ## 依赖
 
@@ -183,4 +183,3 @@ sudo grow-guard uninstall          # 需家长密码;彻底移除守护进程 + 
 **为什么不依赖 Screen Time**:本机管理员密码无法开启系统 Screen Time(受管/MDM 冲突),且它无法工具化进 dev-tools 流程。grow-guard 用 root 守护进程 + PF + hosts 自建了等效能力,可脚本化、可版本管理。
 
 > 如果哪天需要「系统层兜底」,可另做 `gen-profile` 子命令自动生成 `.mobileconfig`,由家长双击安装一次 —— 但那仍需手动确认,无法全自动。当前版本不含此功能。
-
